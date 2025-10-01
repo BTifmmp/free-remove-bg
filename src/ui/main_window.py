@@ -2,28 +2,54 @@ from PyQt5.QtWidgets import (
     QMainWindow, QApplication, QHBoxLayout, QWidget, QVBoxLayout, QSplitter
 )
 from PyQt5.QtCore import Qt
+from PyQt5 import QtGui, QtCore
 from .button_widget import ButtonWidget
 from .images_panel_widget import ImagesPanelWidget
 from .drop_mask_widget import DropMask
 from .images_controller import ImagesController
 from .drop_handler import DropHandler
 from .images_model import ImagesModel
+from .info_log_widget import InfoLogsWidget
+from .qt_logger import QtLogger
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-
-        self.setAcceptDrops(True)
-        self.on_drop_callback = None
-
+        self.setup_window()
+        
+        # Main layout
         central = QWidget()
         self.setCentralWidget(central)
-
         self.main_layout = QVBoxLayout()
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.main_layout.setSpacing(0)
         central.setLayout(self.main_layout)
 
+        # Images models and controllers
+        self.images_model = ImagesModel()
+        self.res_images_model = ImagesModel()
+        self.images_controller = ImagesController(self.images_model)
+        self.res_images_controller = ImagesController(self.res_images_model)
+        self.images_controller.clear_temp() # clear temp on start
+        self.images_controller.backgroundRemoved.connect(lambda x: self.res_images_controller.add_images(x, False))
+
+        # Drag and drop setup
+        self.dropHandler = DropHandler(self)
+        self.mask = DropMask(self)
+        self.dropHandler.dropEntered.connect(self.mask.show)
+        self.dropHandler.dropExited.connect(self.mask.hide)
+        self.dropHandler.filesDropped.connect(lambda paths: self.images_controller.add_images(paths, log=True))
+
+        # Create main UI components
+        self.create_menu_bar()
+        self.create_buttons_row()
+        self.create_resizable_layout()
+        self.mask.raise_()
+
+        QtLogger.instance().log("Application started.")
+
+    def setup_window(self):
+        self.setAcceptDrops(True)
         self.setWindowTitle("Free Remove BG")
         
         # Get screen geometry
@@ -42,26 +68,74 @@ class MainWindow(QMainWindow):
         y = (screen_height - height) // 2
         self.move(x, y)
 
-        self.setStyleSheet(q_window_style)
+        self.setStyleSheet('background-color: #353535; color: #eaeaea;')
 
-        self.images_model = ImagesModel()
-        self.res_images_model = ImagesModel()
-        self.images_controller = ImagesController(self.images_model)
-        self.res_images_controller = ImagesController(self.res_images_model)
-        self.dropHandler = DropHandler(self)
+    def create_menu_bar(self):
+        files_menu = self.menuBar().addMenu("Files")
+        model_menu = self.menuBar().addMenu("Model")
+        device_menu = self.menuBar().addMenu("Device")
+        help_menu = self.menuBar().addMenu("Help")
 
-        self.mask = DropMask(self)
-        self.dropHandler.dropEntered.connect(self.mask.show)
-        self.dropHandler.dropExited.connect(self.mask.hide)
-        self.dropHandler.filesDropped.connect(self.images_controller.add_images)
+        # Add actions to the file menu
+        load_images = files_menu.addAction("Load Images")
+        load_images.triggered.connect(lambda: self.images_controller.select_images(self))
+        clear_images = files_menu.addAction("Clear Images")
+        clear_images.triggered.connect(self.images_controller.clear_images)
+        clear_images.triggered.connect(self.res_images_controller.clear_images)
+        remove_bg = files_menu.addAction("Remove Background")
+        remove_bg.triggered.connect(self.images_controller.remove_bg_from_all)
+        save_results = files_menu.addAction("Save Results")
+        save_results.triggered.connect(lambda: self.res_images_controller.save_images(self))
+        files_menu.addSeparator()
+        exit_action = files_menu.addAction("Exit")
+        exit_action.triggered.connect(self.close)
 
-        self.create_buttons_row()
-        self.create_images_panels()
-        self.main_layout.addStretch()
+        # Add actions to the model menu
+        model14 = model_menu.addAction("RMBGv1.4 (default)")
+        model20 = model_menu.addAction("RMBGv2.0")
 
-        self.mask.raise_()
-        self.mask.hide()
+        model14.setCheckable(True)
+        model20.setCheckable(True)
+        model14.setChecked(True)
+        model20.setChecked(False)
+        def select_model(action):
+            if action == model14:
+                model14.setChecked(True)
+                model20.setChecked(False)
+                QtLogger.instance().message.emit("Model set to RMBGv1.4")
+            else:
+                model14.setChecked(False)
+                model20.setChecked(True)
+                QtLogger.instance().message.emit("Model set to RMBGv2.0")
+        model14.triggered.connect(lambda: select_model(model14))
+        model20.triggered.connect(lambda: select_model(model20))
 
+        # Add actions to the device menu
+        cpu_action = device_menu.addAction("CPU")
+        gpu_action = device_menu.addAction("GPU (requires CUDA)")
+        cpu_action.setCheckable(True)
+        gpu_action.setCheckable(True)
+        cpu_action.setChecked(True)
+        gpu_action.setChecked(False)
+
+        def select_device(action):
+            if action == cpu_action:
+                cpu_action.setChecked(True)
+                gpu_action.setChecked(False)
+                QtLogger.instance().message.emit("Device set to CPU")
+            else:
+                cpu_action.setChecked(False)
+                gpu_action.setChecked(True)
+                QtLogger.instance().message.emit("Device set to GPU")
+        cpu_action.triggered.connect(lambda: select_device(cpu_action))
+        gpu_action.triggered.connect(lambda: select_device(gpu_action))
+
+        # Add actions to the help menu
+        open_github = help_menu.addAction("See on GitHub")
+        open_github.triggered.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl("https://github.com")))
+
+
+        self.menuBar().setStyleSheet(menu_style)
 
     def create_buttons_row(self):
         row_widget = QWidget()
@@ -72,10 +146,14 @@ class MainWindow(QMainWindow):
         button_layout.setContentsMargins(5, 5, 5, 5)
 
         button1 = ButtonWidget("Select Images")
+        button1.clicked.connect(lambda: self.images_controller.select_images(self))
         button11 = ButtonWidget("Clear")
-        button11.clicked.connect(self.images_controller.clear_images)
+        button11.clicked.connect(lambda: self.images_controller.clear_images(log=True))
+        button11.clicked.connect(lambda: self.res_images_controller.clear_images(log=False))
         button2 = ButtonWidget("Remove BG")
+        button2.clicked.connect(self.images_controller.remove_bg_from_all)
         button3 = ButtonWidget("Save Results")
+        button3.clicked.connect(lambda: self.res_images_controller.save_images(self))
 
         mini_row = QHBoxLayout()
         mini_row.addWidget(button1)
@@ -113,11 +191,64 @@ class MainWindow(QMainWindow):
         splitter.setCollapsible(1, False)
 
         # Add splitter to the main layout, it will expand to fill available space
-        self.main_layout.addWidget(splitter)
-        self.main_layout.setStretchFactor(splitter, 1)
+        # self.main_layout.addWidget(splitter)
+        # self.main_layout.setStretchFactor(splitter, 1)
 
-q_window_style = """
-    QMainWindow {
+        return splitter
+    
+    def create_resizable_layout(self):
+        images_splitter = self.create_images_panels()
+        splitter = QSplitter(Qt.Vertical)
+        splitter.setHandleWidth(1)  # thickness of draggable handle
+        splitter.setStyleSheet("QSplitter::handle { background-color: #404040; }")
+        splitter.addWidget(images_splitter)
+        splitter.addWidget(InfoLogsWidget())
+        splitter.setStretchFactor(0, 1)
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
+        splitter.setSizes([1000, 100])
+        self.main_layout.addWidget(splitter)
+
+    def closeEvent(self, a0):
+        self.images_controller.clear_temp() # clear temp on exit
+        return super().closeEvent(a0)
+
+
+menu_style = """
+    /* Menu bar background */
+    QMenuBar {
         background-color: #353535;
+        color: #eaeaea; 
+        font-size: 14px;
+        padding: 5px 0px;
     }
-"""
+
+    /* Highlight menu bar items when hovered */
+    QMenuBar::item:selected {
+        background-color: #404040;
+    }
+
+    /* Menu drop-down background */
+    QMenu {
+        background-color: #404040; 
+        color: #eaeaea;
+        border: 1px solid #505050;
+    }
+
+    /* Menu item hovered */
+    QMenu::item:selected {
+        background-color: #505050;
+    }
+
+    /* Disabled menu items */
+    QMenu::item:disabled {
+        color: #888;
+    }
+
+    /* Optional separator style */
+    QMenu::separator {
+        height: 1px;
+        background: #505050;
+        margin: 5px 0px;
+    }
+    """

@@ -6,8 +6,6 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt, QTimer
 from .images_controller import ImagesController
 
-
-
 class ImagesPanelWidget(QWidget):
     def __init__(self, images_controller: ImagesController, empty_text="No images selected"):
         super().__init__()
@@ -51,7 +49,7 @@ class ImagesPanelWidget(QWidget):
         self._resize_timer.timeout.connect(self.update_images)
 
     def resizeEvent(self, a0):
-        self._resize_timer.start(100)
+        self._resize_timer.start(20)
         return super().resizeEvent(a0)
 
     def update_images(self):
@@ -74,20 +72,22 @@ class ImagesPanelWidget(QWidget):
         # Add images in 3-column grid
 
         panel_width = self.scroll_area.viewport().width()
+        panel_height = self.scroll_area.viewport().height()
+
         num_of_img = len(images)
-        max_width = max(0, self.scroll_area.viewport().width()//3-20)
+        max_width = max(0, panel_width//3-20)
         columns = 3
 
         if num_of_img <= 3:
-            max_width = max(0, self.scroll_area.viewport().width()//num_of_img-20)
+            max_width = max(min(max(0, panel_width//num_of_img-20), panel_height-50), 100)
             columns = max(1, num_of_img)
 
-        if panel_width < 450:
-            max_width = max(0, self.scroll_area.viewport().width()//2-20)
+        if panel_width < 450 and num_of_img >= 2:
+            max_width = max(min(max(0, panel_width//2-20), panel_height-50), 100)
             columns = 2
 
-        if panel_width < 300:
-            max_width = max(0, self.scroll_area.viewport().width()//1-20)
+        if panel_width < 300 and num_of_img >= 2:
+            max_width = max(min(max(0, panel_width//1-20), panel_height-50), 100)
             columns = 1
 
         for index, path in enumerate(images):
@@ -102,13 +102,21 @@ class ImagesPanelWidget(QWidget):
             container.setLayout(container_layout)
 
             # Image
+            image_container = QWidget()
+            image_container.setMaximumSize(max_width, max_width)
+            image_container.setLayout(QVBoxLayout())
+            image_container.layout().setContentsMargins(1, 1, 1, 1)
+            image_container.layout().setAlignment(Qt.AlignCenter)
             pixmap = QPixmap(path)
             if not pixmap.isNull():
                 pixmap = pixmap.scaled(max_width, max_width, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             image_label = QLabel()
             image_label.setPixmap(pixmap)
-            image_label.setAlignment(Qt.AlignCenter)
-            container_layout.addWidget(image_label)
+            image_label.setFixedSize(pixmap.size())
+            image_label.setStyleSheet("background-color: rgba(0, 0, 0, 0.3);")
+            image_container.layout().addWidget(image_label)
+            container_layout.addWidget(image_container)
+            container_layout.addStretch()
 
             # File name
             filename = path.split('/')[-1] if len(path.split('/')[-1]) < 50 else path.split('/')[-1][:23] + '...' + path.split('/')[-1][-23:]
