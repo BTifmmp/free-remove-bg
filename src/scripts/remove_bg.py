@@ -1,11 +1,11 @@
 from PIL import Image
-from skimage import io
 import torch
 import torch.nn.functional as F
-from transformers import AutoConfig, AutoModelForImageSegmentation
+from transformers import AutoModelForImageSegmentation
 from torchvision.transforms.functional import normalize
 from torchvision import transforms
 import numpy as np
+import kornia
 
 
 class InferenceManager:

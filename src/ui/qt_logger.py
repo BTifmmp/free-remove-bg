@@ -21,3 +21,4 @@ class QtLogger(QObject):
         """Call from any thread (OK if called from main thread)."""
         # if you want, you can add timestamp/level here
         self.message.emit(text)
+        

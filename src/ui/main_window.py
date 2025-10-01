@@ -49,7 +49,7 @@ class MainWindow(QMainWindow):
         self.dropHandler.dropEntered.connect(self.mask.show)
         self.dropHandler.dropExited.connect(self.mask.hide)
         self.dropHandler.filesDropped.connect(lambda paths: self.images_controller.add_images(paths, log=True))
-
+        
         QtLogger.instance().log("Application started.")
 
     def setup_window(self):
@@ -110,7 +110,10 @@ class MainWindow(QMainWindow):
         select_model(model14)  # default
         model14.triggered.connect(lambda: select_model(model14))
         model20.triggered.connect(lambda: select_model(model20))
-
+        model_menu.addSeparator()
+        clear_models = model_menu.addAction(f"Clear Model ({self.model_type_controller.get_model()})")
+        clear_models.triggered.connect(self.model_type_controller.clear_models)
+        
         # Add actions to the help menu
         open_github = help_menu.addAction("See on GitHub")
         open_github.triggered.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl("https://github.com/BTifmmp/free-remove-bg")))
