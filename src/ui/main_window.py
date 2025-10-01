@@ -33,23 +33,26 @@ class MainWindow(QMainWindow):
         self.images_controller.clear_temp() # clear temp on start
         self.images_controller.backgroundRemoved.connect(lambda x: self.res_images_controller.add_images(x, False))
 
-        # Drag and drop setup
-        self.dropHandler = DropHandler(self)
-        self.mask = DropMask(self)
-        self.dropHandler.dropEntered.connect(self.mask.show)
-        self.dropHandler.dropExited.connect(self.mask.hide)
-        self.dropHandler.filesDropped.connect(lambda paths: self.images_controller.add_images(paths, log=True))
-
         # Create main UI components
         self.create_menu_bar()
         self.create_buttons_row()
         self.create_resizable_layout()
+
+        # Drag and drop setup
+        self.dropHandler = DropHandler(self.images_panel_load)
+        self.images_panel_load.setAcceptDrops(True)
+        self.mask = DropMask(self.images_panel_load)
         self.mask.raise_()
+        self.dropHandler.dropEntered.connect(self.mask.show)
+        self.dropHandler.dropExited.connect(self.mask.hide)
+        self.dropHandler.filesDropped.connect(lambda paths: self.images_controller.add_images(paths, log=True))
+
+        
 
         QtLogger.instance().log("Application started.")
 
     def setup_window(self):
-        self.setAcceptDrops(True)
+        # self.setAcceptDrops(True)
         self.setWindowTitle("Free Remove BG")
         
         # Get screen geometry
@@ -80,8 +83,8 @@ class MainWindow(QMainWindow):
         load_images = files_menu.addAction("Load Images")
         load_images.triggered.connect(lambda: self.images_controller.select_images(self))
         clear_images = files_menu.addAction("Clear Images")
-        clear_images.triggered.connect(self.images_controller.clear_images)
-        clear_images.triggered.connect(self.res_images_controller.clear_images)
+        clear_images.triggered.connect(lambda: self.images_controller.clear_images(log=True))
+        clear_images.triggered.connect(lambda: self.res_images_controller.clear_images(log=False))
         remove_bg = files_menu.addAction("Remove Background")
         remove_bg.triggered.connect(self.images_controller.remove_bg_from_all)
         save_results = files_menu.addAction("Save Results")

@@ -5,7 +5,7 @@ from .images_model import ImagesModel
 import sys
 import os
 
-from src.scripts.remove_bg import remove_bg
+from src.scripts.remove_bg import InferenceManager
 from .qt_logger import QtLogger
 import os
 
@@ -54,6 +54,8 @@ class ImagesController(QObject):
             QtLogger.instance().log("Cleared all images")
 
     def remove_bg_from_all(self):
+        InferenceManager().load_model("rmbg20")
+        remove_bg = InferenceManager().remove_background
         temp_dir = os.path.join("temp")
         self.worker = RemoveBGWorker(
             image_paths=self.get_images(),
@@ -118,7 +120,7 @@ class RemoveBGWorker(QThread):
     def __init__(self, image_paths, output_dir, remove_bg_func):
         super().__init__()
         self.image_paths = image_paths
-        self.output_dir = output_dir
+        self.output_dir = os.path.abspath(output_dir)
         self.remove_bg_func = remove_bg_func
 
     def run(self):

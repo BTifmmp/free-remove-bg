@@ -2,8 +2,8 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QScrollArea,
     QGridLayout, QFrame, QSizePolicy
 )
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtGui import QPixmap, QDrag
+from PyQt5.QtCore import Qt, QTimer, QUrl, QMimeData
 from .images_controller import ImagesController
 
 class ImagesPanelWidget(QWidget):
@@ -107,13 +107,7 @@ class ImagesPanelWidget(QWidget):
             image_container.setLayout(QVBoxLayout())
             image_container.layout().setContentsMargins(1, 1, 1, 1)
             image_container.layout().setAlignment(Qt.AlignCenter)
-            pixmap = QPixmap(path)
-            if not pixmap.isNull():
-                pixmap = pixmap.scaled(max_width, max_width, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            image_label = QLabel()
-            image_label.setPixmap(pixmap)
-            image_label.setFixedSize(pixmap.size())
-            image_label.setStyleSheet("background-color: rgba(0, 0, 0, 0.3);")
+            image_label = DraggableImage(path, max_width)
             image_container.layout().addWidget(image_label)
             container_layout.addWidget(image_container)
             container_layout.addStretch()
@@ -133,6 +127,38 @@ class ImagesPanelWidget(QWidget):
         # Update scroll area size
         self.scroll_content.setMinimumHeight(self.scroll_layout.sizeHint().height())
         self.scroll_area.setWidget(self.scroll_content)
+
+
+class DraggableImage(QLabel):
+    def __init__(self, image_path, max_width, parent=None):
+        super().__init__(parent)
+        self.image_path = image_path
+        pixmap = QPixmap(image_path).scaled(max_width, max_width, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+        if pixmap.isNull():
+            pixmap = QPixmap(max_width, max_width)
+            pixmap.fill(Qt.darkGray)
+        
+        self.setPixmap(pixmap)
+        self.setAlignment(Qt.AlignCenter)
+        self.setFixedSize(pixmap.size())
+        self.setStyleSheet("background-color: rgba(0, 0, 0, 0.3);")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            drag = QDrag(self)
+            mime_data = QMimeData()
+
+            # Important: set URLs for file drag (desktop/file system)
+            mime_data.setUrls([QUrl.fromLocalFile(self.image_path)])
+            drag.setMimeData(mime_data)
+
+            # Optional: show pixmap while dragging
+            drag.setPixmap(self.pixmap())
+            drag.setHotSpot(event.pos())
+
+            drag.exec_(Qt.CopyAction)
+
 
 images_panel_style = """
     QWidget {

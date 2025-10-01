@@ -7,6 +7,9 @@ class DropMask(QWidget):
         super().__init__(parent)
         self.setStyleSheet("background-color: rgba(0, 0, 0, 0.5);")
         self.setWindowFlags(Qt.Widget | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setGeometry(0, 0, parent.width(), parent.height())
         
         # Centered label
@@ -16,10 +19,11 @@ class DropMask(QWidget):
 
         layout = QVBoxLayout(self)
         layout.addWidget(label)
+        layout.setStretchFactor(label, 1)
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.hide()
 
-    def resizeEvent(self, event):
-        """Force the mask to always cover the parent window"""
-        self.setGeometry(0, 0, self.parent().width(), self.parent().height())
+    def showEvent(self, a0):
+        self.resize(self.parent().size())
+        return super().showEvent(a0)
