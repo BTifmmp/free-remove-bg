@@ -1,11 +1,12 @@
 import shutil
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
-from PyQt5.QtWidgets import QFileDialog
+from PyQt5.QtWidgets import QFileDialog, QMessageBox
 from .images_model import ImagesModel
 import sys
 import os
 
 from src.scripts.remove_bg import InferenceManager
+from src.scripts.model_downloader import ModelDownloader
 from .qt_logger import QtLogger
 import os
 
@@ -16,6 +17,7 @@ class ImagesController(QObject):
     def __init__(self, images_model: ImagesModel):
         super().__init__()
         self.images_model = images_model
+        self._model_name = None
 
         # Forward model signal to controller signal
         self.images_model.imagesChanged.connect(self.imagesChanged)
@@ -54,7 +56,24 @@ class ImagesController(QObject):
             QtLogger.instance().log("Cleared all images")
 
     def remove_bg_from_all(self):
-        InferenceManager().load_model("rmbg20")
+        if not ModelDownloader().verify_download(self._model_name):
+            res = self.ask_download()
+            if not res:
+                return
+            try:
+                QtLogger.instance().log(f"Downloading model: {self._model_name}")
+                ModelDownloader().download_model(self._model_name)
+            except Exception as e:
+                QtLogger.instance().log(f"Error downloading model {self._model_name}: {e}")
+                return
+            
+        try:
+            QtLogger.instance().log(f"Loading model: {self._model_name}")
+            InferenceManager().load_model(self._model_name)
+        except Exception as e:
+            QtLogger.instance().log(f"Error loading model {self._model_name}: {e}")
+            return
+
         remove_bg = InferenceManager().remove_background
         temp_dir = os.path.join("temp")
         self.worker = RemoveBGWorker(
@@ -111,6 +130,38 @@ class ImagesController(QObject):
         if paths:
             self.add_images(paths)
 
+    def setModelName(self, model_name: str):
+        self._model_name = model_name
+
+    def ask_download(self, parent=None):
+        msg_box = QMessageBox(parent)
+        msg_box.setIcon(QMessageBox.Question)
+        msg_box.setWindowTitle("Confirm Download")
+        msg_box.setText(f"Do you want to download the {'RMGB1.4 (~200MB)' if self._model_name == 'rmbg14' else 'RMGB2.0 (~900MB)'}?")
+        msg_box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        msg_box.setStyleSheet("""
+            background-color: #353535;
+            color: #eaeaea;
+            QPushButton {
+                background-color: #3a3a3a;
+                color: white;
+                border: 1px solid #222222;
+                border-radius: 10px;
+                padding: 8px 10px;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #404040;
+            }
+            QPushButton:pressed {
+                background-color: #303030;
+            }
+        """)
+        msg_box.setDefaultButton(QMessageBox.Yes)
+
+        ret = msg_box.exec_()  # returns QMessageBox.Yes or QMessageBox.No
+        return ret == QMessageBox.Yes
 
 class RemoveBGWorker(QThread):
     progress = pyqtSignal(str)  # status messages

@@ -11,6 +11,7 @@ from .drop_handler import DropHandler
 from .images_model import ImagesModel
 from .info_log_widget import InfoLogsWidget
 from .qt_logger import QtLogger
+from .model_type_controller import ModelTypeController
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -30,6 +31,8 @@ class MainWindow(QMainWindow):
         self.res_images_model = ImagesModel()
         self.images_controller = ImagesController(self.images_model)
         self.res_images_controller = ImagesController(self.res_images_model)
+        self.model_type_controller = ModelTypeController()
+        self.model_type_controller.modelChanged.connect(self.images_controller.setModelName)
         self.images_controller.clear_temp() # clear temp on start
         self.images_controller.backgroundRemoved.connect(lambda x: self.res_images_controller.add_images(x, False))
 
@@ -46,8 +49,6 @@ class MainWindow(QMainWindow):
         self.dropHandler.dropEntered.connect(self.mask.show)
         self.dropHandler.dropExited.connect(self.mask.hide)
         self.dropHandler.filesDropped.connect(lambda paths: self.images_controller.add_images(paths, log=True))
-
-        
 
         QtLogger.instance().log("Application started.")
 
@@ -76,7 +77,6 @@ class MainWindow(QMainWindow):
     def create_menu_bar(self):
         files_menu = self.menuBar().addMenu("Files")
         model_menu = self.menuBar().addMenu("Model")
-        device_menu = self.menuBar().addMenu("Device")
         help_menu = self.menuBar().addMenu("Help")
 
         # Add actions to the file menu
@@ -94,49 +94,26 @@ class MainWindow(QMainWindow):
         exit_action.triggered.connect(self.close)
 
         # Add actions to the model menu
-        model14 = model_menu.addAction("RMBGv1.4 (default)")
+        model14 = model_menu.addAction("RMBGv1.4")
         model20 = model_menu.addAction("RMBGv2.0")
-
         model14.setCheckable(True)
         model20.setCheckable(True)
-        model14.setChecked(True)
-        model20.setChecked(False)
         def select_model(action):
             if action == model14:
+                self.model_type_controller.set_model("rmbg14")
                 model14.setChecked(True)
                 model20.setChecked(False)
-                QtLogger.instance().message.emit("Model set to RMBGv1.4")
             else:
+                self.model_type_controller.set_model("rmbg20")
                 model14.setChecked(False)
                 model20.setChecked(True)
-                QtLogger.instance().message.emit("Model set to RMBGv2.0")
+        select_model(model14)  # default
         model14.triggered.connect(lambda: select_model(model14))
         model20.triggered.connect(lambda: select_model(model20))
 
-        # Add actions to the device menu
-        cpu_action = device_menu.addAction("CPU")
-        gpu_action = device_menu.addAction("GPU (requires CUDA)")
-        cpu_action.setCheckable(True)
-        gpu_action.setCheckable(True)
-        cpu_action.setChecked(True)
-        gpu_action.setChecked(False)
-
-        def select_device(action):
-            if action == cpu_action:
-                cpu_action.setChecked(True)
-                gpu_action.setChecked(False)
-                QtLogger.instance().message.emit("Device set to CPU")
-            else:
-                cpu_action.setChecked(False)
-                gpu_action.setChecked(True)
-                QtLogger.instance().message.emit("Device set to GPU")
-        cpu_action.triggered.connect(lambda: select_device(cpu_action))
-        gpu_action.triggered.connect(lambda: select_device(gpu_action))
-
         # Add actions to the help menu
         open_github = help_menu.addAction("See on GitHub")
-        open_github.triggered.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl("https://github.com")))
-
+        open_github.triggered.connect(lambda: QtGui.QDesktopServices.openUrl(QtCore.QUrl("https://github.com/BTifmmp/free-remove-bg")))
 
         self.menuBar().setStyleSheet(menu_style)
 

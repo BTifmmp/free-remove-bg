@@ -31,7 +31,8 @@ class InferenceManager:
         self.model_name = model_name
         self.model = AutoModelForImageSegmentation.from_pretrained(
             pretrained_model_name_or_path=f'models/{model_name}',
-            trust_remote_code=True
+            trust_remote_code=True,
+            local_files_only=True
         )
         if model_name == "rmbg14":
             self.model.to(self.device)
