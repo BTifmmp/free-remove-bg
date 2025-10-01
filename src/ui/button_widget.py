@@ -14,7 +14,7 @@ button_style = """
                 color: white;
                 border: 1px solid #222222;
                 border-radius: 10px;
-                padding: 8px 20px;
+                padding: 8px 10px;
                 font-weight: bold;
                 font-size: 12px;
             }

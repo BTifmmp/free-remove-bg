@@ -4,12 +4,17 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from .button_widget import ButtonWidget
 from .images_panel_widget import ImagesPanelWidget
-from .drag_drop_widget import DragDropOverlay
-
+from .drop_mask_widget import DropMask
+from .images_controller import ImagesController
+from .drop_handler import DropHandler
+from .images_model import ImagesModel
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        self.setAcceptDrops(True)
+        self.on_drop_callback = None
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -39,11 +44,23 @@ class MainWindow(QMainWindow):
 
         self.setStyleSheet(q_window_style)
 
-        self.overlay = DragDropOverlay(self)
+        self.images_model = ImagesModel()
+        self.res_images_model = ImagesModel()
+        self.images_controller = ImagesController(self.images_model)
+        self.res_images_controller = ImagesController(self.res_images_model)
+        self.dropHandler = DropHandler(self)
+
+        self.mask = DropMask(self)
+        self.dropHandler.dropEntered.connect(self.mask.show)
+        self.dropHandler.dropExited.connect(self.mask.hide)
+        self.dropHandler.filesDropped.connect(self.images_controller.add_images)
 
         self.create_buttons_row()
         self.create_images_panels()
         self.main_layout.addStretch()
+
+        self.mask.raise_()
+        self.mask.hide()
 
 
     def create_buttons_row(self):
@@ -55,11 +72,16 @@ class MainWindow(QMainWindow):
         button_layout.setContentsMargins(5, 5, 5, 5)
 
         button1 = ButtonWidget("Select Images")
+        button11 = ButtonWidget("Clear")
+        button11.clicked.connect(self.images_controller.clear_images)
         button2 = ButtonWidget("Remove BG")
         button3 = ButtonWidget("Save Results")
 
+        mini_row = QHBoxLayout()
+        mini_row.addWidget(button1)
+        mini_row.addWidget(button11)
 
-        button_layout.addWidget(button1)
+        button_layout.addLayout(mini_row)
         button_layout.addStretch()
         button_layout.addWidget(button2)
         button_layout.addStretch()
@@ -74,13 +96,13 @@ class MainWindow(QMainWindow):
         splitter.setStyleSheet("QSplitter::handle { background-color: #404040; }")
 
         # Left panel: loaded images
-        self.images_panel_load = ImagesPanelWidget(None, empty_text="Drag & drop or select images")
+        self.images_panel_load = ImagesPanelWidget(self.images_controller, empty_text="Drag & drop or select images")
         self.images_panel_load.setMinimumWidth(200)
         self.images_panel_load.setStyleSheet("background-color: #303030;")
         splitter.addWidget(self.images_panel_load)
 
         # Right panel: result images
-        self.images_panel_result = ImagesPanelWidget(None, empty_text="No results yet")
+        self.images_panel_result = ImagesPanelWidget(self.res_images_controller, empty_text="No results yet")
         self.images_panel_result.setMinimumWidth(200)
         self.images_panel_result.setStyleSheet("background-color: #303030;")
         splitter.addWidget(self.images_panel_result)
@@ -94,7 +116,6 @@ class MainWindow(QMainWindow):
         self.main_layout.addWidget(splitter)
         self.main_layout.setStretchFactor(splitter, 1)
 
-        
 q_window_style = """
     QMainWindow {
         background-color: #353535;
