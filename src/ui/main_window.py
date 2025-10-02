@@ -1,17 +1,23 @@
+import logging
+import sys
 from PyQt5.QtWidgets import (
     QMainWindow, QApplication, QHBoxLayout, QWidget, QVBoxLayout, QSplitter
 )
 from PyQt5.QtCore import Qt
 from PyQt5 import QtGui, QtCore
-from .button_widget import ButtonWidget
-from .images_panel_widget import ImagesPanelWidget
-from .drop_mask_widget import DropMask
-from .images_controller import ImagesController
-from .drop_handler import DropHandler
-from .images_model import ImagesModel
-from .info_log_widget import InfoLogsWidget
-from .qt_logger import QtLogger
-from .model_type_controller import ModelTypeController
+
+from src.ui.model.selected_model import SelectedModel
+from .view.button_widget import ButtonWidget
+from .view.images_panel_widget import ImagesPanelWidget
+from .view.drop_mask_widget import DropMask
+from .controller.images_controller import ImagesController
+from .view.drop_handler import DropHandler
+from .model.images_model import ImagesModel
+from .view.console_widget import ConsoleWidget, QtLogHandler
+from .controller.remove_bg_controller import RemoveBgController
+from .controller.model_select_controller import ModelSelectController
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -31,10 +37,9 @@ class MainWindow(QMainWindow):
         self.res_images_model = ImagesModel()
         self.images_controller = ImagesController(self.images_model)
         self.res_images_controller = ImagesController(self.res_images_model)
-        self.model_type_controller = ModelTypeController()
-        self.model_type_controller.modelChanged.connect(self.images_controller.setModelName)
-        self.images_controller.clear_temp() # clear temp on start
-        self.images_controller.backgroundRemoved.connect(lambda x: self.res_images_controller.add_images(x, False))
+        self.selected_model = SelectedModel()
+        self.selected_model_controller = ModelSelectController(self.selected_model)
+        self.remove_bg_controller = RemoveBgController(self.images_model, self.res_images_model, self.selected_model)
 
         # Create main UI components
         self.create_menu_bar()
@@ -48,9 +53,9 @@ class MainWindow(QMainWindow):
         self.mask.raise_()
         self.dropHandler.dropEntered.connect(self.mask.show)
         self.dropHandler.dropExited.connect(self.mask.hide)
-        self.dropHandler.filesDropped.connect(lambda paths: self.images_controller.add_images(paths, log=True))
-        
-        QtLogger.instance().log("Application started.")
+        self.dropHandler.filesDropped.connect(lambda paths: self.images_controller.add_images(paths))
+
+        logging.info("Application started.")
 
     def setup_window(self):
         # self.setAcceptDrops(True)
@@ -83,10 +88,10 @@ class MainWindow(QMainWindow):
         load_images = files_menu.addAction("Load Images")
         load_images.triggered.connect(lambda: self.images_controller.select_images(self))
         clear_images = files_menu.addAction("Clear Images")
-        clear_images.triggered.connect(lambda: self.images_controller.clear_images(log=True))
-        clear_images.triggered.connect(lambda: self.res_images_controller.clear_images(log=False))
+        clear_images.triggered.connect(lambda: self.images_controller.clear_images())
+        clear_images.triggered.connect(lambda: self.res_images_controller.clear_images())
         remove_bg = files_menu.addAction("Remove Background")
-        remove_bg.triggered.connect(self.images_controller.remove_bg_from_all)
+        remove_bg.triggered.connect(self.remove_bg_controller.remove_backgrounds)
         save_results = files_menu.addAction("Save Results")
         save_results.triggered.connect(lambda: self.res_images_controller.save_images(self))
         files_menu.addSeparator()
@@ -100,19 +105,17 @@ class MainWindow(QMainWindow):
         model20.setCheckable(True)
         def select_model(action):
             if action == model14:
-                self.model_type_controller.set_model("rmbg14")
+                # self.model_type_controller.set_model("rmbg14")
                 model14.setChecked(True)
                 model20.setChecked(False)
             else:
-                self.model_type_controller.set_model("rmbg20")
+                # self.model_type_controller.set_model("rmbg20")
                 model14.setChecked(False)
                 model20.setChecked(True)
         select_model(model14)  # default
         model14.triggered.connect(lambda: select_model(model14))
         model20.triggered.connect(lambda: select_model(model20))
         model_menu.addSeparator()
-        clear_models = model_menu.addAction(f"Clear Model ({self.model_type_controller.get_model()})")
-        clear_models.triggered.connect(self.model_type_controller.clear_models)
         
         # Add actions to the help menu
         open_github = help_menu.addAction("See on GitHub")
@@ -131,10 +134,10 @@ class MainWindow(QMainWindow):
         button1 = ButtonWidget("Select Images")
         button1.clicked.connect(lambda: self.images_controller.select_images(self))
         button11 = ButtonWidget("Clear")
-        button11.clicked.connect(lambda: self.images_controller.clear_images(log=True))
-        button11.clicked.connect(lambda: self.res_images_controller.clear_images(log=False))
+        button11.clicked.connect(lambda: self.images_controller.clear_images())
+        button11.clicked.connect(lambda: self.res_images_controller.clear_images())
         button2 = ButtonWidget("Remove BG")
-        button2.clicked.connect(self.images_controller.remove_bg_from_all)
+        button2.clicked.connect(self.remove_bg_controller.remove_backgrounds)
         button3 = ButtonWidget("Save Results")
         button3.clicked.connect(lambda: self.res_images_controller.save_images(self))
 
@@ -185,16 +188,19 @@ class MainWindow(QMainWindow):
         splitter.setHandleWidth(1)  # thickness of draggable handle
         splitter.setStyleSheet("QSplitter::handle { background-color: #404040; }")
         splitter.addWidget(images_splitter)
-        splitter.addWidget(InfoLogsWidget())
+
+        console = ConsoleWidget()
+        qt_log_handler = QtLogHandler(console)
+        handler_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
+        qt_log_handler.setFormatter(handler_format)
+        logging.getLogger().addHandler(qt_log_handler)
+
+        splitter.addWidget(console)
         splitter.setStretchFactor(0, 1)
         splitter.setCollapsible(0, False)
         splitter.setCollapsible(1, False)
         splitter.setSizes([1000, 100])
         self.main_layout.addWidget(splitter)
-
-    def closeEvent(self, a0):
-        self.images_controller.clear_temp() # clear temp on exit
-        return super().closeEvent(a0)
 
 
 menu_style = """

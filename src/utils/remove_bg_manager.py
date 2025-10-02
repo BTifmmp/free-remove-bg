@@ -1,15 +1,15 @@
 from PIL import Image
-import torch
+import torch, os
 import torch.nn.functional as F
 from transformers import AutoModelForImageSegmentation
 from torchvision.transforms.functional import normalize
+from PyQt5.QtCore import pyqtSignal, QThread
 from torchvision import transforms
 import numpy as np
-import kornia
 
+from src.models_data import AVAILABLE_MODELS
 
-class InferenceManager:
-    AVAILABLE_MODELS = ["rmbg14", "rmbg20"]
+class RemoveBgManager:
     _instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -25,8 +25,8 @@ class InferenceManager:
             self._initialized = True
 
     def load_model(self, model_name: str):
-        if model_name not in self.AVAILABLE_MODELS:
-            raise ValueError(f"Model {model_name} is not available. Choose from {self.AVAILABLE_MODELS}")
+        if model_name not in AVAILABLE_MODELS:
+            raise ValueError(f"Model {model_name} is not available. Choose from {AVAILABLE_MODELS}")
 
         self.model_name = model_name
         self.model = AutoModelForImageSegmentation.from_pretrained(
@@ -38,9 +38,6 @@ class InferenceManager:
             self.model.to(self.device)
         if model_name == "rmbg20":
             self.model.eval().to(self.device)
-
-    def switch_model(self, model_name: str):
-        self.load_model(model_name)
 
     def remove_background(self, image_path: str) -> Image.Image:
         if self.model_name == "rmbg14":
@@ -109,3 +106,22 @@ class InferenceManager:
         im_array = (result*255).permute(1,2,0).cpu().data.numpy().astype(np.uint8)
         im_array = np.squeeze(im_array)
         return im_array
+    
+
+class RemoveBGWorker(QThread):
+    finished_image = pyqtSignal(str, Image.Image, int)  # path of processed image
+    done = pyqtSignal()  # all images finished
+
+    def __init__(self, image_paths, remove_bg_func):
+        super().__init__()
+        self.image_paths = image_paths
+        self.remove_bg_func = remove_bg_func
+
+    def run(self):
+        for i, img_path in enumerate(self.image_paths):
+            image = self.remove_bg_func(img_path)  # must return a PIL.Image
+            name = os.path.splitext(os.path.basename(img_path))[0]
+            self.finished_image.emit(name, image, i)
+
+        # Emit done signal when all images are processed
+        self.done.emit()

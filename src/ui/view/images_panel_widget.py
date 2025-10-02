@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtGui import QPixmap, QDrag
 from PyQt5.QtCore import Qt, QTimer, QUrl, QMimeData
-from .images_controller import ImagesController
+from ..controller.images_controller import ImagesController
 
 class ImagesPanelWidget(QWidget):
     def __init__(self, images_controller: ImagesController, empty_text="No images selected"):
