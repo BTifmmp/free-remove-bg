@@ -1,8 +1,9 @@
-import logging
-import os, sys
+import os
 from huggingface_hub import snapshot_download
 from PyQt5.QtCore import pyqtSignal, QThread
 from src.models_data import AVAILABLE_MODELS, MODELS_CONFIG
+from src.ui.view.console_widget import StdoutRedirector
+
 
 class ModelDownloadWorker(QThread):
     finished = pyqtSignal(str)

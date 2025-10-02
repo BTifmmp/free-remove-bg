@@ -57,6 +57,42 @@ class QtLogHandler(logging.Handler):
         msg = self.format(record)
         self.widget.append_message(msg)
 
+class StdoutRedirector:
+    """Singleton to capture stdout/stderr and forward to a console widget."""
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self.console_widget = None
+        self.terminal = sys.__stderr__ 
+        self._initialized = True
+
+    def set_console(self, console_widget):
+        """Attach/replace the console widget where logs will be written."""
+        self.console_widget = console_widget
+
+    def write(self, text):
+        self.terminal.write(text)  # still print to real console
+        if self.console_widget and text.strip():  # forward to Qt console
+            self.console_widget.append_message(text)
+
+    def flush(self):
+        self.terminal.flush()
+
+    def enabled(self, enable: bool):
+        if enable:
+            sys.stderr = self
+        else:
+            sys.stderr = self.terminal
+
+
 style = """
     QPlainTextEdit {
         background-color: #202020;
