@@ -1,6 +1,7 @@
 import logging
 from PyQt5.QtWidgets import QPlainTextEdit
 from PyQt5.QtGui import QFont
+from PyQt5.QtCore import pyqtSignal, QObject
 import sys
 
 
@@ -8,7 +9,6 @@ class ConsoleWidget(QPlainTextEdit):
     def __init__(self, parent=None, max_lines=1000):
         super().__init__(parent)
         self.max_lines = max_lines
-        self.last_line_overwrite = False
 
         font = QFont("Monospace")
         font.setStyleHint(QFont.Monospace)
@@ -22,18 +22,6 @@ class ConsoleWidget(QPlainTextEdit):
 
     def append_message(self, text: str):
         cursor = self.textCursor()
-        overwrite = False
-        if "\r " in text:
-            text = text.replace("\r ", "")
-            overwrite = True
-        if overwrite and self.last_line_overwrite:
-            cursor.movePosition(cursor.End)
-            cursor.select(cursor.BlockUnderCursor)
-            cursor.removeSelectedText()
-            cursor.deletePreviousChar()
-        else:
-            self.last_line_overwrite = False
-
         cursor.movePosition(cursor.End)
         cursor.insertText(text + "\n")
         self.setTextCursor(cursor)
@@ -45,52 +33,35 @@ class ConsoleWidget(QPlainTextEdit):
             cursor.select(cursor.BlockUnderCursor)
             cursor.removeSelectedText()
 
-        self.last_line_overwrite = overwrite
-
-class QtLogHandler(logging.Handler):
+class LogCapture(logging.Handler, QObject):
     """Forward Python logging records into QtLogger."""
-    def __init__(self, widget: ConsoleWidget):
+    captured = pyqtSignal(str)
+
+    def __init__(self):
         super().__init__()
-        self.widget = widget
+        QObject.__init__(self)
 
     def emit(self, record):
         msg = self.format(record)
-        self.widget.append_message(msg)
+        self.captured.emit(msg)
 
-class StdoutRedirector:
-    """Singleton to capture stdout/stderr and forward to a console widget."""
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
+class SysOutputCapture(QObject):
+    """Capture sys.stdout and sys.stderr and emit as signal. 
+    Used mainly to track HF download progress
+    """
+    captured = pyqtSignal(str)
 
     def __init__(self):
-        if self._initialized:
-            return
-        self.console_widget = None
-        self.terminal = sys.__stderr__ 
-        self._initialized = True
-
-    def set_console(self, console_widget):
-        """Attach/replace the console widget where logs will be written."""
-        self.console_widget = console_widget
+        super().__init__()
+        self.terminal = sys.__stdout__  # keep a reference to the real console
 
     def write(self, text):
-        self.terminal.write(text)  # still print to real console
-        if self.console_widget and text.strip():  # forward to Qt console
-            self.console_widget.append_message(text)
+        self.terminal.write(text)
+        if text.strip():  # avoid extra newlines
+            self.captured.emit(text)
 
     def flush(self):
         self.terminal.flush()
-
-    def enabled(self, enable: bool):
-        if enable:
-            sys.stderr = self
-        else:
-            sys.stderr = self.terminal
 
 
 style = """

@@ -13,7 +13,7 @@ from .view.drop_mask_widget import DropMask
 from .controller.images_controller import ImagesController
 from .view.drop_handler import DropHandler
 from .model.images_model import ImagesModel
-from .view.console_widget import ConsoleWidget, QtLogHandler, StdoutRedirector
+from .view.console_widget import ConsoleWidget, LogCapture, SysOutputCapture
 from .controller.remove_bg_controller import RemoveBgController
 from .controller.model_select_controller import ModelSelectController
 
@@ -190,12 +190,18 @@ class MainWindow(QMainWindow):
         splitter.addWidget(images_splitter)
 
         console = ConsoleWidget()
-        StdoutRedirector().set_console(console)
-        StdoutRedirector().enabled(False)  # disable by default
-        qt_log_handler = QtLogHandler(console)
-        handler_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%H:%M:%S')
-        qt_log_handler.setFormatter(handler_format)
-        logging.getLogger().addHandler(qt_log_handler)
+        
+        # Redirect stdout and stderr
+        capture_out = SysOutputCapture()
+        sys.stdout = capture_out
+
+        # LogCapture
+        log_capture = LogCapture()
+        logging.getLogger().addHandler(log_capture)
+
+        # Connect signals to console
+        capture_out.captured.connect(console.append_message)
+        log_capture.captured.connect(console.append_message)
 
         splitter.addWidget(console)
         splitter.setStretchFactor(0, 1)
